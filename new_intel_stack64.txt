@@ -1,0 +1,26 @@
+/* This function and macro is helpful to set up the LWP in x86_64 architectures 
+You call it from inside lwp_create(), and it should be defined in lwp.c. 
+The input "sp" is the current stack pointer, which 
+at the beginning is just the number of (unsigned long) spaces AFTER the base of the stack.
+It returns the new stack pointer which you should save in your LWP structure. */
+
+/* useful for "intuitively" building stacks */
+#define push(sp,val) (*(--sp)=(unsigned long)(val))
+
+static unsigned long *new_intel_stack64(unsigned long *sp,lwpfun func){
+  /* mock up a stack for the INTEL architecture
+   * First, a frame that returns to lwp_exit() should our function actually
+   * return.
+   */
+
+  unsigned long *ebp;
+
+  push(sp,lwp_exit);        /* just in case this lwp tries to return */
+  push(sp,func);            /* push the function's return address */
+  push(sp,0);               /* push a "saved" base pointer */
+
+  ebp=sp;                   /* note the location for use later... */
+
+  return ebp;
+}
+
