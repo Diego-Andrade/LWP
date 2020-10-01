@@ -104,7 +104,3 @@ void install_handler(int sig, sigfun fun){
   }
 }
 
-void Lol()
-{
-  printf("hello world");
-}
