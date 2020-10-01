@@ -104,3 +104,6 @@ void install_handler(int sig, sigfun fun){
   }
 }
 
+void useless_function() {
+  return;
+}
