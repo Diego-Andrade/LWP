@@ -38,6 +38,7 @@ registers {
 
 typedef unsigned long tid_t;
 #define NO_THREAD 0             /* an always invalid thread id */
+int THREAD_ID_COUNTER = 0;      /* To assign Thread ids easier */
 
 typedef struct threadinfo_st *thread;
 typedef struct threadinfo_st {
