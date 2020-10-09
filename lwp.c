@@ -21,12 +21,27 @@ void pushToStack(unsigned long item, unsigned long **sp)
    (*sp)++;
 }
 
+void printStack(unsigned long* stack, int start, int end) {
+   stack += end;
+   for (int i = end; i > start; --i, --stack) {
+      printf("%ld : %ld\n", (unsigned long)stack,*stack);
+   }
+}
+
+void printRFile(rfile* rf) {
+   unsigned long* r = (unsigned long*) r;
+   for (int i = 0 ; r <= &rf->r15; i++, r++) {
+      printf("%ld r%d: %ld\n", (unsigned long)r, i, *r);
+   }
+   printf("\n");
+}
+
 extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 {
    thread new;
    unsigned long *regPt;
    unsigned long *parameters = (unsigned long*) paramp;
-   printf("thread init\n");
+   // printf("thread init\n");
    if ( (new = (thread) malloc(sizeof(struct threadinfo_st))) == NULL ||      /* Allocate memory */
       (new->stack = (unsigned long*) malloc(size)) == NULL )
    {
@@ -34,34 +49,35 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
       /* Implement Clean Up */
       return -1;
    }
-   printf("thread malloced stack\n");
+   // printf("thread malloced stack\n");
 
    /* Initialization */
    new->tid = ++THREAD_ID_COUNTER;
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;
-   new->state.rbp = (unsigned long) new->stack+size;     // move rbp to end of stack
-   new->state.rsp = new->state.rbp;                      // move rsp to rbp
 
-   printf("thread move rsp\n");
-   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);
-   printf("thread add func to return\n");
-   *((unsigned long*)new->state.rsp) = (unsigned long) func;
-   // new->state.rsp = new->state.rsp + sizeof(unsigned long); 
+   new->state.rbp = (unsigned long) (new->stack+size - 1);      // move rbp to end of stack - 2
+   *((unsigned long*)new->state.rbp) = (unsigned long) func;                  // return adress
+   new->state.rbp = (unsigned long) (((unsigned long*)new->state.rbp) - 1);   // move to old rbp
+   *((unsigned long*)new->state.rbp) = (unsigned long) (new->stack+size - 1); // add old rbp 
+   new->state.rsp = new->state.rbp;                                           // move rsp to rbp
 
    // unsigned long a = 2;          
    // unsigned long* rsp = a;       // This should not be allowed....
    // pushToStack(func, &new->state.rsp);    // Incorrect because of above
 
-   printf("thread param init\n");
+   // printf("thread param init\n");
    
+   new->state.rdi = new->tid;
    if (!paramp) {
-      new->state.rdi = (unsigned long) ((unsigned long*) paramp);
-      new->state.rsi = (unsigned long) ((unsigned long*) paramp + 1);
-      new->state.rdx = (unsigned long) ((unsigned long*) paramp + 2);
-      new->state.rcx = (unsigned long) ((unsigned long*) paramp + 3);
-      new->state.r8  = (unsigned long) ((unsigned long*) paramp + 4);
-      new->state.r9  = (unsigned long) ((unsigned long*) paramp + 5);
+      printf("params found\n");
+      // new->state.rdi = (unsigned long) ((unsigned long*) paramp);
+      new->state.rdi = new->tid;
+      // new->state.rsi = (unsigned long) ((unsigned long*) paramp + 1);
+      // new->state.rdx = (unsigned long) ((unsigned long*) paramp + 2);
+      // new->state.rcx = (unsigned long) ((unsigned long*) paramp + 3);
+      // new->state.r8  = (unsigned long) ((unsigned long*) paramp + 4);
+      // new->state.r9  = (unsigned long) ((unsigned long*) paramp + 5);
    }
 
    // regPt = (unsigned long*) &new->state;
@@ -73,12 +89,12 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    //    regPt++;
    //    parameters++;
    // }
-   printf("thread param init on stack\n");
+   // printf("thread param init on stack\n");
    
    // while (parameters != NULL)
    //    pushToStack(parameters++, &new->state.rsp);
 
-   printf("thread link list\n");
+   // printf("thread link list\n");
 
    if (tHead)                                   /* Places new thread into a list */
    {
@@ -97,7 +113,14 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    if (!sched) sched = RoundRobin;
    sched->admit(new);
 
-   printf("done with thread %ld\n", new->tid);
+   printStack(new->stack, size - 5, size-1);
+   printf("\nrbp: %ld\n", new->state.rbp);
+   printf("rsp: %ld\n", new->state.rsp);
+   // printf("stack end: %ld\n", (unsigned long)(new->stack+size-1));
+
+   // printRFile(&new->state);
+
+   printf("\ndone with thread %ld\n\n", new->tid);
 
    return new->tid;
 }
@@ -127,7 +150,7 @@ extern void  lwp_yield(void) {
 
 // TODO will start be called more than once? And will it be from within a LWP?
 extern void  lwp_start(void) {
-   printf("!!starting lwp!!\n");
+   // printf("!!starting lwp!!\n");
    if (!sched || !(tCurr = sched->next()))
       return;                          
 
@@ -135,9 +158,17 @@ extern void  lwp_start(void) {
       cOrig = (context*) malloc(sizeof(cOrig));
    save_context(&cOrig->state);
    // sched->admit(cOrig);       // TODO does the original process run?
-   printf("Loading %ld into context\n", tCurr->tid);
+   // SetSP(tCurr->state.rsp);
+   // printf("Loading %ld into context\n", tCurr->tid);
    load_context(&tCurr->state);
-   printf("Starting %ld\n", tCurr->tid);
+   
+
+   // printStack(tCurr->stack, tCurr->stacksize - 5, tCurr->stacksize);
+   // printf("\nrbp: %ld\n", tCurr->state.rbp);
+   // printf("rsp: %ld\n", tCurr->state.rsp);
+   // printf("stack end: %ld\n", (unsigned long)(tCurr->stack + tCurr->stacksize-1));
+
+   // printf("Starting %ld\n", tCurr->tid);
 }
 
 extern void  lwp_stop(void) {
