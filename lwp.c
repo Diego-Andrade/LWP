@@ -15,23 +15,45 @@ static context* cOrig;              // Original context holder
 static scheduler sched = NULL;      // Current schedular
 static thread tCurr = NULL;         // The current running thread
 
+void pushToStack(unsigned long item, unsigned long **sp)
+{
+   **sp = item;
+   (*sp)++;
+}
+
 extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 {
    thread new;
-   unsigned long regPt;
+   unsigned long *regPt;
+   unsigned long *parameters = (unsigned long*) paramp;
+   int i;
 
    if (((new = malloc(sizeof(struct threadinfo_st)) == NULL) ||      /* Allocate memory */
       ((new->stack = malloc(size)) == NULL)))
    {
       perror(PROGNAME);
       /* Implement Clean Up */
-      exit(EXIT_FAILURE);
+      return -1;
    }
 
+   /* Initialization */
    new->tid = ++THREAD_ID_COUNTER;
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;
-   
+   new->state.rsp = new->stack;
+   new->state.rbp = new->stack;
+   regPt = &new->state;
+   pushToStack(*func, &new->state.rsp);
+   for (i = 0; i < 6; i++)
+   {
+      if (parameters == NULL)
+         break;
+      *regPt = *parameters;
+      parameters++;
+   }
+   while (parameters++ != NULL)
+      pushToStack(*parameters, &new->state.rsp);
+
    if (tHead)                                   /* Places new thread into a list */
    {
       tHead->tprev->tnext = new;
