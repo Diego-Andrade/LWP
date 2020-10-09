@@ -9,9 +9,10 @@
 static int THREAD_ID_COUNTER = 0;      /* To assign Thread ids easier */
 static thread tHead = NULL;
 
-extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
+extern tid_t lwp_create(lwpfun func,void *paramp,size_t size)
 {
    thread new;
+   unsigned long regPt;
 
    if (((new = malloc(sizeof(struct threadinfo_st)) == NULL) ||      /* Allocate memory */
       ((new->stack = malloc(size)) == NULL)))
@@ -24,6 +25,7 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    new->tid = ++THREAD_ID_COUNTER;
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;
+   
    if (tHead)                                   /* Places new thread into a list */
    {
       tHead->tprev->tnext = new;
