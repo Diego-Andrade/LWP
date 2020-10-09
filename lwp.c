@@ -68,28 +68,12 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 
    // printf("thread param init\n");
    
-   new->state.rdi = new->tid;
-   if (!paramp) {
-      printf("params found\n");
-      // new->state.rdi = (unsigned long) ((unsigned long*) paramp);
-      new->state.rdi = new->tid;
-      // new->state.rsi = (unsigned long) ((unsigned long*) paramp + 1);
-      // new->state.rdx = (unsigned long) ((unsigned long*) paramp + 2);
-      // new->state.rcx = (unsigned long) ((unsigned long*) paramp + 3);
-      // new->state.r8  = (unsigned long) ((unsigned long*) paramp + 4);
-      // new->state.r9  = (unsigned long) ((unsigned long*) paramp + 5);
-   }
-
-   // regPt = (unsigned long*) &new->state;
-   // for (int i = 0; i < 6; i++)
-   // {
-   //    if (parameters == NULL)
-   //       break;
-   //    *regPt = *parameters;
-   //    regPt++;
-   //    parameters++;
-   // }
-   // printf("thread param init on stack\n");
+   new->state.rdi = (unsigned long) ((unsigned long*) paramp);
+   new->state.rsi = (unsigned long) ((unsigned long*) paramp + 1);
+   new->state.rdx = (unsigned long) ((unsigned long*) paramp + 2);
+   new->state.rcx = (unsigned long) ((unsigned long*) paramp + 3);
+   new->state.r8  = (unsigned long) ((unsigned long*) paramp + 4);
+   new->state.r9  = (unsigned long) ((unsigned long*) paramp + 5);
    
    // while (parameters != NULL)
    //    pushToStack(parameters++, &new->state.rsp);
