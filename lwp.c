@@ -62,7 +62,13 @@ extern tid_t lwp_gettid(void) {
    return NO_THREAD;
 }
 
-extern void  lwp_yield(void);
+extern void  lwp_yield(void) {
+   save_context(&tCurr->state);
+   sched->admit(tCurr);
+
+   tCurr = sched->next();
+   load_context(&tCurr->state);
+}
 
 // TODO will start be called more than once? And will it be from within a LWP?
 extern void  lwp_start(void) {
@@ -71,9 +77,9 @@ extern void  lwp_start(void) {
 
    if (!cOrig) 
       cOrig = (context*) malloc(sizeof(cOrig));
-
    save_context(&cOrig->state);
    // sched->admit(cOrig);       // TODO does the original process run?
+
    load_context(&tCurr->state);
 }
 
