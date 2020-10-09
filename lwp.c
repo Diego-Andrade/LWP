@@ -26,23 +26,36 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    thread new;
    unsigned long *regPt;
    unsigned long *parameters = (unsigned long*) paramp;
-
-   if (((new = malloc(sizeof(struct threadinfo_st)) == NULL) ||      /* Allocate memory */
-      ((new->stack = malloc(size)) == NULL)))
+   printf("thread init\n");
+   if ( (new = (thread) malloc(sizeof(struct threadinfo_st))) == NULL ||      /* Allocate memory */
+      (new->stack = (unsigned long*) malloc(size)) == NULL )
    {
       perror(PROGNAME);
       /* Implement Clean Up */
       return -1;
    }
+   printf("thread malloced stack\n");
 
    /* Initialization */
    new->tid = ++THREAD_ID_COUNTER;
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;
-   new->state.rsp = new->stack;
-   new->state.rbp = new->stack;
-   regPt = &new->state;
-   pushToStack(func, &new->state.rsp);
+   new->state.rsp = (unsigned long) new->stack;
+   new->state.rbp = (unsigned long) new->stack;
+
+   printf("thread add func to return\n");
+   *((unsigned long*)new->state.rsp) = (unsigned long) func;
+   printf("thread move rsp\n");
+   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) + 1);
+   // new->state.rsp = new->state.rsp + sizeof(unsigned long); 
+
+   // unsigned long a = 2;          
+   // unsigned long* rsp = a;       // This should not be allowed....
+   // pushToStack(func, &new->state.rsp);    // Incorrect because of above
+
+   printf("thread param init\n");
+   
+   regPt = (unsigned long*) &new->state;
    for (int i = 0; i < 6; i++)
    {
       if (parameters == NULL)
@@ -51,8 +64,12 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
       regPt++;
       parameters++;
    }
-   while (parameters != NULL)
-      pushToStack(parameters++, &new->state.rsp);
+   printf("thread param init on stack\n");
+   
+   // while (parameters != NULL)
+   //    pushToStack(parameters++, &new->state.rsp);
+
+   printf("thread link list");
 
    if (tHead)                                   /* Places new thread into a list */
    {
@@ -68,6 +85,8 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
       new->tprev = new;
    }
    
+   printf("done with thread %ld", new->tid);
+
    return new->tid;
 }
 
