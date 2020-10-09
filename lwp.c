@@ -26,7 +26,6 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    thread new;
    unsigned long *regPt;
    unsigned long *parameters = (unsigned long*) paramp;
-   int i;
 
    if (((new = malloc(sizeof(struct threadinfo_st)) == NULL) ||      /* Allocate memory */
       ((new->stack = malloc(size)) == NULL)))
@@ -43,16 +42,17 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    new->state.rsp = new->stack;
    new->state.rbp = new->stack;
    regPt = &new->state;
-   pushToStack(*func, &new->state.rsp);
-   for (i = 0; i < 6; i++)
+   pushToStack(func, &new->state.rsp);
+   for (int i = 0; i < 6; i++)
    {
       if (parameters == NULL)
          break;
       *regPt = *parameters;
+      regPt++;
       parameters++;
    }
-   while (parameters++ != NULL)
-      pushToStack(*parameters, &new->state.rsp);
+   while (parameters != NULL)
+      pushToStack(parameters++, &new->state.rsp);
 
    if (tHead)                                   /* Places new thread into a list */
    {
