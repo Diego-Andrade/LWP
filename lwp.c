@@ -1,4 +1,6 @@
 #include "lwp.h"
+#include "rr.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -8,6 +10,10 @@
 
 static int THREAD_ID_COUNTER = 0;      /* To assign Thread ids easier */
 static thread tHead = NULL;
+
+static context* cOrig;              // Original context holder
+static scheduler sched = NULL;      // Current schedular
+static thread tCurr = NULL;         // The current running thread
 
 extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 {
@@ -41,11 +47,59 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    return new->tid;
 }
 
-extern void  lwp_exit(void);
-extern tid_t lwp_gettid(void);
+extern void  lwp_exit(void) {
+   thread nxt = sched->next();
+
+   if (!nxt) {
+      // Restore original system context
+   }
+}
+
+extern tid_t lwp_gettid(void) {
+   if (tCurr)
+      return tCurr->tid;
+   
+   return NO_THREAD;
+}
+
 extern void  lwp_yield(void);
-extern void  lwp_start(void);
-extern void  lwp_stop(void);
-extern void  lwp_set_scheduler(scheduler fun);
-extern scheduler lwp_get_scheduler(void);
+
+// TODO will start be called more than once? And will it be from within a LWP?
+extern void  lwp_start(void) {
+   if (!sched || !(tCurr = sched->next()))
+      return;                          
+
+   if (!cOrig) 
+      cOrig = (context*) malloc(sizeof(cOrig));
+
+   save_context(&cOrig->state);
+   // sched->admit(cOrig);       // TODO does the original process run?
+   load_context(&tCurr->state);
+}
+
+extern void  lwp_stop(void) {
+   if (!tCurr) return;
+   
+   save_context(&tCurr->state);
+   sched->admit(tCurr);
+   tCurr = NULL;
+
+   load_context(&cOrig->state);
+}
+extern void  lwp_set_scheduler(scheduler fun) {
+   if (!fun) 
+      fun = RoundRobin;
+
+   if (sched && sched != fun) {           
+      thread temp;
+      while (temp = sched->next()) {
+         fun->admit(temp);
+      }
+   }
+
+   sched = fun;
+}
+
+extern scheduler lwp_get_scheduler(void) { return sched; }
+
 extern thread tid2thread(tid_t tid);
