@@ -40,13 +40,13 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    new->tid = ++THREAD_ID_COUNTER;
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;
-   new->state.rsp = (unsigned long) new->stack;
-   new->state.rbp = (unsigned long) new->stack;
+   new->state.rbp = (unsigned long) new->stack+size;     // move rbp to end of stack
+   new->state.rsp = new->state.rbp;                      // move rsp to rbp
 
+   printf("thread move rsp\n");
+   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);
    printf("thread add func to return\n");
    *((unsigned long*)new->state.rsp) = (unsigned long) func;
-   printf("thread move rsp\n");
-   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) + 1);
    // new->state.rsp = new->state.rsp + sizeof(unsigned long); 
 
    // unsigned long a = 2;          
@@ -55,19 +55,16 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 
    printf("thread param init\n");
    
-   regPt = (unsigned long*) &new->state;
+   if (!paramp) {
+      new->state.rdi = (unsigned long) ((unsigned long*) paramp);
+      new->state.rsi = (unsigned long) ((unsigned long*) paramp + 1);
+      new->state.rdx = (unsigned long) ((unsigned long*) paramp + 2);
+      new->state.rcx = (unsigned long) ((unsigned long*) paramp + 3);
+      new->state.r8  = (unsigned long) ((unsigned long*) paramp + 4);
+      new->state.r9  = (unsigned long) ((unsigned long*) paramp + 5);
+   }
 
-   rfile c;
-   save_context(&c);
-   new->state.rdi = c.rdi;
-   new->state.rsi = c.rsi;
-   new->state.rdx = c.rdx;
-   new->state.rcx = c.rcx;
-   new->state.r8 = c.r8;
-   new->state.r9 = c.r9;
-
-
-
+   // regPt = (unsigned long*) &new->state;
    // for (int i = 0; i < 6; i++)
    // {
    //    if (parameters == NULL)
@@ -140,6 +137,7 @@ extern void  lwp_start(void) {
    // sched->admit(cOrig);       // TODO does the original process run?
    printf("Loading %ld into context\n", tCurr->tid);
    load_context(&tCurr->state);
+   printf("Starting %ld\n", tCurr->tid);
 }
 
 extern void  lwp_stop(void) {
