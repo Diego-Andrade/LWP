@@ -56,20 +56,32 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    printf("thread param init\n");
    
    regPt = (unsigned long*) &new->state;
-   for (int i = 0; i < 6; i++)
-   {
-      if (parameters == NULL)
-         break;
-      *regPt = *parameters;
-      regPt++;
-      parameters++;
-   }
+
+   rfile c;
+   save_context(&c);
+   new->state.rdi = c.rdi;
+   new->state.rsi = c.rsi;
+   new->state.rdx = c.rdx;
+   new->state.rcx = c.rcx;
+   new->state.r8 = c.r8;
+   new->state.r9 = c.r9;
+
+
+
+   // for (int i = 0; i < 6; i++)
+   // {
+   //    if (parameters == NULL)
+   //       break;
+   //    *regPt = *parameters;
+   //    regPt++;
+   //    parameters++;
+   // }
    printf("thread param init on stack\n");
    
    // while (parameters != NULL)
    //    pushToStack(parameters++, &new->state.rsp);
 
-   printf("thread link list");
+   printf("thread link list\n");
 
    if (tHead)                                   /* Places new thread into a list */
    {
@@ -85,7 +97,10 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
       new->tprev = new;
    }
    
-   printf("done with thread %ld", new->tid);
+   if (!sched) sched = RoundRobin;
+   sched->admit(new);
+
+   printf("done with thread %ld\n", new->tid);
 
    return new->tid;
 }
@@ -115,6 +130,7 @@ extern void  lwp_yield(void) {
 
 // TODO will start be called more than once? And will it be from within a LWP?
 extern void  lwp_start(void) {
+   printf("!!starting lwp!!\n");
    if (!sched || !(tCurr = sched->next()))
       return;                          
 
@@ -122,7 +138,7 @@ extern void  lwp_start(void) {
       cOrig = (context*) malloc(sizeof(cOrig));
    save_context(&cOrig->state);
    // sched->admit(cOrig);       // TODO does the original process run?
-
+   printf("Loading %ld into context\n", tCurr->tid);
    load_context(&tCurr->state);
 }
 
