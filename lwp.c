@@ -56,7 +56,7 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;
 
-   new->state.rbp = (unsigned long) (new->stack+size - 1);      // move rbp to end of stack - 2
+   new->state.rbp = (unsigned long) (new->stack+size - 2);      // move rbp to end of stack - 2
    *((unsigned long*)new->state.rbp) = (unsigned long) func;                  // return adress
    new->state.rbp = (unsigned long) (((unsigned long*)new->state.rbp) - 1);   // move to old rbp
    *((unsigned long*)new->state.rbp) = (unsigned long) (new->stack+size - 1); // add old rbp 
@@ -97,24 +97,34 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    if (!sched) sched = RoundRobin;
    sched->admit(new);
 
-   printStack(new->stack, size - 5, size-1);
-   printf("\nrbp: %ld\n", new->state.rbp);
-   printf("rsp: %ld\n", new->state.rsp);
+   // printStack(new->stack, size - 5, size-1);
+   // printf("\nrbp: %ld\n", new->state.rbp);
+   // printf("rsp: %ld\n", new->state.rsp);
    // printf("stack end: %ld\n", (unsigned long)(new->stack+size-1));
 
    // printRFile(&new->state);
 
-   printf("\ndone with thread %ld\n\n", new->tid);
+   // printf("\ndone with thread %ld\n\n", new->tid);
 
    return new->tid;
 }
 
 extern void  lwp_exit(void) {
-   thread nxt = sched->next();
+   sched->remove(tCurr);
 
+   thread nxt = sched->next();
    if (!nxt) {
       // Restore original system context
+      load_context(&cOrig->state);
+      free(cOrig);
+      return;
    }
+
+   load_context(&nxt->state);
+   // Free resources
+   free(tCurr->stack);
+   free(tCurr);
+   tCurr = nxt;
 }
 
 extern tid_t lwp_gettid(void) {
@@ -126,9 +136,9 @@ extern tid_t lwp_gettid(void) {
 
 extern void  lwp_yield(void) {
    save_context(&tCurr->state);
-   sched->admit(tCurr);
 
    tCurr = sched->next();
+   int x = tCurr->tid;
    load_context(&tCurr->state);
 }
 
@@ -159,7 +169,6 @@ extern void  lwp_stop(void) {
    if (!tCurr) return;
    
    save_context(&tCurr->state);
-   sched->admit(tCurr);
    tCurr = NULL;
 
    load_context(&cOrig->state);
