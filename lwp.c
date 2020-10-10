@@ -15,7 +15,19 @@ static context* cOrig;              // Original context holder
 static scheduler sched = NULL;      // Current schedular
 static thread tCurr = NULL;         // The current running thread
 
-extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
+void printStack(thread t) {
+   unsigned long* stack = (unsigned long*)(((unsigned long)t->stack) + t->stacksize);
+   for ( ; stack != t->stack - 1;  --stack) {
+      printf("%p : %p\n", stack, (void*)*stack);
+   }
+}
+
+void push(unsigned long *rsp, unsigned long val) {
+   *rsp = (unsigned long) (((unsigned long*)*rsp) - 1);
+   *(unsigned long*)*rsp = val;
+}
+
+extern tid_t lwp_create(lwpfun func,void * paramp,size_t size) 
 {
    context *new;
 
@@ -33,18 +45,15 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;    
    new->state.rsp = ((unsigned long)new->stack) + size;
-
-   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);      // move rsp to end of stack
-   *((unsigned long*)new->state.rsp) = (unsigned long) lwp_exit;    // return address for exiting thread
-   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);      //push function address
-   *((unsigned long*)new->state.rsp) = (unsigned long) func;
-   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);   // push stack location for rbp
-   *((unsigned long*)new->state.rsp) = ((unsigned long)new->stack) + size;
-   new->state.rbp = new->state.rsp;    
-
-   // unsigned long a = 2;          
-   // unsigned long* rsp = a;       // This should not be allowed....
-   // pushToStack(func, &new->state.rsp);    // Incorrect because of above
+   new->state.rbp = new->state.rsp;
+                                                         // ---------------
+   push(&new->state.rsp, (unsigned long) lwp_exit);      //    lwp_exit
+   push(&new->state.rsp, new->state.rbp);                //    old_rbp
+   new->state.rbp = new->state.rsp;
+   push(&new->state.rsp, (unsigned long) func);          //    func
+   push(&new->state.rsp, new->state.rbp);                //    old_rbp
+   new->state.rbp = new->state.rsp;   
+   push(&new->state.rsp, 0);                             //    0
 
    // printf("thread param init\n");
    
@@ -77,12 +86,14 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    if (!sched) sched = RoundRobin;
    sched->admit(new);
 
-   // printStack(new->stack, size - 5, size-1);
+   // if (new->tid == 1) {
+   //    printStack(new);
+   //    printf("\nlwp_exit at: %p\n", lwp_exit);
+   //    printf("\nfunc at: %p\n", func);
+   // }
    // printf("\nrbp: %ld\n", new->state.rbp);
    // printf("rsp: %ld\n", new->state.rsp);
-   // printf("stack end: %ld\n", (unsigned long)(new->stack+size-1));
-
-   // printRFile(&new->state);
+   // printf("stack end: %ld\n", (unsigned long)(new->stack+size-1));;
 
    // printf("\ndone with thread %ld\n\n", new->tid);
 
@@ -120,11 +131,22 @@ extern void  lwp_start(void) {
       return;                          
 
    if (!cOrig)
-      cOrig = (context*) malloc(sizeof(cOrig));
+      cOrig = (context*) malloc(sizeof(context));
    save_context(&cOrig->state);
    // sched->admit(cOrig);       // TODO does the original process run?
    // SetSP(tCurr->state.rsp);
    // printf("Loading %ld into context\n", tCurr->tid);
+   // if (tCurr->tid == 1) {
+      printf("\nid: %ld\n", tCurr->tid);
+      printf("stack end: %p\n", tCurr->stack);
+      printStack(tCurr);
+      fflush(stdout);
+      printf("\n");
+      printf("\nid: %ld\n", tCurr->lib_one->tid);
+      printf("stack end: %p\n", tCurr->lib_one->stack);
+      printStack(tCurr->lib_one);
+      fflush(stdout);
+   // }
    load_context(&tCurr->state);
    free(cOrig);
    cOrig = NULL;
