@@ -33,29 +33,25 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 
    // printf("thread init\n");
    if ( (new = (context*) malloc(sizeof(context))) == NULL ||      /* Allocate memory */
-      (new->stack = (unsigned long*) malloc(size)) == NULL)
+      (new->stack = (unsigned long*) malloc(size * sizeof(unsigned long))) == NULL)
    {
       perror(PROGNAME);
       return -1;
    }
-   // printf("thread malloced stack\n");
 
    /* Initialization */
    new->tid = ++THREAD_ID_COUNTER;
    new->stacksize = size;
    new->state.fxsave = FPU_INIT;    
-   new->state.rsp = ((unsigned long)new->stack) + size;
-   new->state.rbp = new->state.rsp;
-                                                         // ---------------
+   new->state.rsp = (unsigned long)(new->stack + size - 1);     
+   new->state.rbp = new->state.rsp;                                           
+                                                         // ---------------    
    push(&new->state.rsp, (unsigned long) lwp_exit);      //    lwp_exit
    push(&new->state.rsp, new->state.rbp);                //    old_rbp
    new->state.rbp = new->state.rsp;
    push(&new->state.rsp, (unsigned long) func);          //    func
    push(&new->state.rsp, new->state.rbp);                //    old_rbp
    new->state.rbp = new->state.rsp;   
-   push(&new->state.rsp, 0);                             //    0
-
-   // printf("thread param init\n");
    
    new->state.rdi = (unsigned long) ((unsigned long*) paramp);
    new->state.rsi = (unsigned long) ((unsigned long*) paramp + 1);
@@ -66,8 +62,6 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    
    // while (parameters != NULL)
    //    pushToStack(parameters++, &new->state.rsp);
-
-   // printf("thread link list\n");
 
    if (tHead)                                   /* Places new thread into a list */
    {
@@ -85,17 +79,6 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    
    if (!sched) sched = RoundRobin;
    sched->admit(new);
-
-   // if (new->tid == 1) {
-   //    printStack(new);
-   //    printf("\nlwp_exit at: %p\n", lwp_exit);
-   //    printf("\nfunc at: %p\n", func);
-   // }
-   // printf("\nrbp: %ld\n", new->state.rbp);
-   // printf("rsp: %ld\n", new->state.rsp);
-   // printf("stack end: %ld\n", (unsigned long)(new->stack+size-1));;
-
-   // printf("\ndone with thread %ld\n\n", new->tid);
 
    return new->tid;
 }
@@ -124,40 +107,16 @@ extern void lwp_yield(void) {
       load_context(&tCurr->state);
 }
 
-// TODO will start be called more than once? And will it be from within a LWP?
 extern void  lwp_start(void) {
-   // printf("!!starting lwp!!\n");
    if (!sched || !(tCurr = sched->next()))
       return;                          
 
    if (!cOrig)
       cOrig = (context*) malloc(sizeof(context));
    save_context(&cOrig->state);
-   // sched->admit(cOrig);       // TODO does the original process run?
-   // SetSP(tCurr->state.rsp);
-   // printf("Loading %ld into context\n", tCurr->tid);
-   // if (tCurr->tid == 1) {
-      printf("\nid: %ld\n", tCurr->tid);
-      printf("stack end: %p\n", tCurr->stack);
-      printStack(tCurr);
-      fflush(stdout);
-      printf("\n");
-      printf("\nid: %ld\n", tCurr->lib_one->tid);
-      printf("stack end: %p\n", tCurr->lib_one->stack);
-      printStack(tCurr->lib_one);
-      fflush(stdout);
-   // }
    load_context(&tCurr->state);
    free(cOrig);
    cOrig = NULL;
-   
-
-   // printStack(tCurr->stack, tCurr->stacksize - 5, tCurr->stacksize);
-   // printf("\nrbp: %ld\n", tCurr->state.rbp);
-   // printf("rsp: %ld\n", tCurr->state.rsp);
-   // printf("stack end: %ld\n", (unsigned long)(tCurr->stack + tCurr->stacksize-1));
-
-   // printf("Starting %ld\n", tCurr->tid);
 }
 
 extern void  lwp_stop(void) {
