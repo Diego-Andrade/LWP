@@ -15,38 +15,15 @@ static context* cOrig;              // Original context holder
 static scheduler sched = NULL;      // Current schedular
 static thread tCurr = NULL;         // The current running thread
 
-void pushToStack(unsigned long item, unsigned long **sp)
-{
-   **sp = item;
-   (*sp)++;
-}
-
-void printStack(unsigned long* stack, int start, int end) {
-   stack += end;
-   for (int i = end; i > start; --i, --stack) {
-      printf("%ld : %ld\n", (unsigned long)stack,*stack);
-   }
-}
-
-void printRFile(rfile* rf) {
-   unsigned long* r = (unsigned long*) r;
-   for (int i = 0 ; r <= &rf->r15; i++, r++) {
-      printf("%ld r%d: %ld\n", (unsigned long)r, i, *r);
-   }
-   printf("\n");
-}
-
 extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 {
-   thread new;
-   unsigned long *regPt;
-   unsigned long *parameters = (unsigned long*) paramp;
+   context *new;
+
    // printf("thread init\n");
-   if ( (new = (thread) malloc(sizeof(context))) == NULL ||      /* Allocate memory */
+   if ( (new = (context*) malloc(sizeof(context))) == NULL ||      /* Allocate memory */
       (new->stack = (unsigned long*) malloc(size)) == NULL)
    {
       perror(PROGNAME);
-      /* Implement Clean Up */
       return -1;
    }
    // printf("thread malloced stack\n");
@@ -118,13 +95,8 @@ extern void  lwp_exit(void) {
    free(tCurr->stack);
    free(tCurr);
    thread tCurr = sched->next();
-   if (!tCurr) {
-      // Restore original system context
-      load_context(&cOrig->state);
-      free(cOrig);
-      cOrig = NULL;
-      return;
-   }
+   if (!tCurr)
+      load_context(&cOrig->state);     // Restore original system context
    load_context(&tCurr->state);
 }
 
@@ -154,6 +126,8 @@ extern void  lwp_start(void) {
    // SetSP(tCurr->state.rsp);
    // printf("Loading %ld into context\n", tCurr->tid);
    load_context(&tCurr->state);
+   free(cOrig);
+   cOrig = NULL;
    
 
    // printStack(tCurr->stack, tCurr->stacksize - 5, tCurr->stacksize);
