@@ -4,5 +4,15 @@ Name of both partners in this format:
 Diego Andrade (andrader@calpoly.edu)
 Brian Pease (bspease@calpoly.edu)
 
+How is this LWP library different from a real thread management library? 
+    - Our method of handling parameters is not as robust as a library would be.
+    - We have a limitation of the number of thread ids available.
+    - We don't support all registers availble on x86-64
+    - There are no checks for a stack overflow for each thread.
+
+
+Name 2 ways in which this LWP library API could be improved.
+    - Adding a signal handler to support preempting threads.
+    - Handling more than 6 parameters by pushing onto thread's stack.
 
 

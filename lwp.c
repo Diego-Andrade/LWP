@@ -15,13 +15,6 @@ static context* cOrig;              // Original context holder
 static scheduler sched = NULL;      // Current schedular
 static thread tCurr = NULL;         // The current running thread
 
-void printStack(thread t) {
-   unsigned long* stack = (unsigned long*)(((unsigned long)t->stack) + t->stacksize);
-   for ( ; stack != t->stack - 1;  --stack) {
-      printf("%p : %p\n", stack, (void*)*stack);
-   }
-}
-
 void push(unsigned long *rsp, unsigned long val) {
    *rsp = (unsigned long) (((unsigned long*)*rsp) - 1);
    *(unsigned long*)*rsp = val;
@@ -31,7 +24,6 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 {
    context *new;
 
-   // printf("thread init\n");
    if ( (new = (context*) malloc(sizeof(context))) == NULL ||      /* Allocate memory */
       (new->stack = (unsigned long*) malloc(size * sizeof(unsigned long))) == NULL)
    {
@@ -59,9 +51,6 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    new->state.rcx = (unsigned long) ((unsigned long*) paramp + 3);
    new->state.r8  = (unsigned long) ((unsigned long*) paramp + 4);
    new->state.r9  = (unsigned long) ((unsigned long*) paramp + 5);
-   
-   // while (parameters != NULL)
-   //    pushToStack(parameters++, &new->state.rsp);
 
    if (tHead)                                   /* Places new thread into a list */
    {
@@ -86,11 +75,19 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 extern void  lwp_exit(void) {
    sched->remove(tCurr);
 
+   if (tCurr->tnext = tCurr)
+      tHead = NULL;
+   else if (tCurr == tHead) 
+      tHead = tHead->tnext;
+
    free(tCurr->stack);
    free(tCurr);
-   thread tCurr = sched->next();
-   if (!tCurr)
+
+   tCurr = sched->next();
+   if (!tCurr) {
       load_context(&cOrig->state);     // Restore original system context
+   }
+   
    load_context(&tCurr->state);
 }
 
@@ -105,6 +102,8 @@ extern void lwp_yield(void) {
    save_context(&tCurr->state);
    if (tCurr = sched->next())
       load_context(&tCurr->state);
+   else
+      load_context(&cOrig->state); 
 }
 
 extern void  lwp_start(void) {
@@ -115,8 +114,14 @@ extern void  lwp_start(void) {
       cOrig = (context*) malloc(sizeof(context));
    save_context(&cOrig->state);
    load_context(&tCurr->state);
+   
+   // Return from lwp_exit() on last thread
    free(cOrig);
    cOrig = NULL;
+
+   if (tHead == NULL) {
+      sched = NULL;
+   }
 }
 
 extern void  lwp_stop(void) {
@@ -131,6 +136,7 @@ extern void  lwp_set_scheduler(scheduler fun) {
    if (sched && sched != fun) {           
       thread temp;
       while (temp = sched->next()) {
+         sched->remove(temp);
          fun->admit(temp);
       }
    }
@@ -142,12 +148,14 @@ extern scheduler lwp_get_scheduler(void) { return sched; }
 
 extern thread tid2thread(tid_t tid)
 {
-   thread curr = tHead->tnext;
+   if (!tHead) return NULL;
 
-   while (curr != tHead && curr->tid != tid);
+   thread curr = tHead->tnext;
+   while (curr != tHead && curr->tid != tid)
+      curr = curr->tnext;
 
    if (curr->tid == tid)
       return curr;
-   else
-      return NULL;
+
+   return NULL;
 }
