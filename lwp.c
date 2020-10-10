@@ -42,8 +42,8 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    unsigned long *regPt;
    unsigned long *parameters = (unsigned long*) paramp;
    // printf("thread init\n");
-   if ( (new = (thread) malloc(sizeof(struct threadinfo_st))) == NULL ||      /* Allocate memory */
-      (new->stack = (unsigned long*) malloc(size)) == NULL )
+   if ( (new = (thread) malloc(sizeof(context))) == NULL ||      /* Allocate memory */
+      (new->stack = (unsigned long*) malloc(size)) == NULL)
    {
       perror(PROGNAME);
       /* Implement Clean Up */
@@ -54,13 +54,16 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
    /* Initialization */
    new->tid = ++THREAD_ID_COUNTER;
    new->stacksize = size;
-   new->state.fxsave = FPU_INIT;
+   new->state.fxsave = FPU_INIT;    
+   new->state.rsp = ((unsigned long)new->stack) + size;
 
-   new->state.rbp = (unsigned long) (new->stack+size - 2);      // move rbp to end of stack - 2
-   *((unsigned long*)new->state.rbp) = (unsigned long) func;                  // return adress
-   new->state.rbp = (unsigned long) (((unsigned long*)new->state.rbp) - 1);   // move to old rbp
-   *((unsigned long*)new->state.rbp) = (unsigned long) (new->stack+size - 1); // add old rbp 
-   new->state.rsp = new->state.rbp;                                           // move rsp to rbp
+   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);      // move rsp to end of stack
+   *((unsigned long*)new->state.rsp) = (unsigned long) lwp_exit;    // return address for exiting thread
+   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);      //push function address
+   *((unsigned long*)new->state.rsp) = (unsigned long) func;
+   new->state.rsp = (unsigned long) (((unsigned long*)new->state.rsp) - 1);   // push stack location for rbp
+   *((unsigned long*)new->state.rsp) = ((unsigned long)new->stack) + size;
+   new->state.rbp = new->state.rsp;    
 
    // unsigned long a = 2;          
    // unsigned long* rsp = a;       // This should not be allowed....
@@ -112,19 +115,17 @@ extern tid_t lwp_create(lwpfun func,void * paramp,size_t size)
 extern void  lwp_exit(void) {
    sched->remove(tCurr);
 
-   thread nxt = sched->next();
-   if (!nxt) {
+   free(tCurr->stack);
+   free(tCurr);
+   thread tCurr = sched->next();
+   if (!tCurr) {
       // Restore original system context
       load_context(&cOrig->state);
       free(cOrig);
+      cOrig = NULL;
       return;
    }
-
-   load_context(&nxt->state);
-   // Free resources
-   free(tCurr->stack);
-   free(tCurr);
-   tCurr = nxt;
+   load_context(&tCurr->state);
 }
 
 extern tid_t lwp_gettid(void) {
@@ -134,12 +135,10 @@ extern tid_t lwp_gettid(void) {
    return NO_THREAD;
 }
 
-extern void  lwp_yield(void) {
+extern void lwp_yield(void) {
    save_context(&tCurr->state);
-
-   tCurr = sched->next();
-   int x = tCurr->tid;
-   load_context(&tCurr->state);
+   if (tCurr = sched->next())
+      load_context(&tCurr->state);
 }
 
 // TODO will start be called more than once? And will it be from within a LWP?
@@ -148,7 +147,7 @@ extern void  lwp_start(void) {
    if (!sched || !(tCurr = sched->next()))
       return;                          
 
-   if (!cOrig) 
+   if (!cOrig)
       cOrig = (context*) malloc(sizeof(cOrig));
    save_context(&cOrig->state);
    // sched->admit(cOrig);       // TODO does the original process run?
@@ -166,13 +165,10 @@ extern void  lwp_start(void) {
 }
 
 extern void  lwp_stop(void) {
-   if (!tCurr) return;
-   
    save_context(&tCurr->state);
-   tCurr = NULL;
-
    load_context(&cOrig->state);
 }
+
 extern void  lwp_set_scheduler(scheduler fun) {
    if (!fun) 
       fun = RoundRobin;
@@ -189,4 +185,14 @@ extern void  lwp_set_scheduler(scheduler fun) {
 
 extern scheduler lwp_get_scheduler(void) { return sched; }
 
-extern thread tid2thread(tid_t tid);
+extern thread tid2thread(tid_t tid)
+{
+   thread curr = tHead->tnext;
+
+   while (curr != tHead && curr->tid != tid);
+
+   if (curr->tid == tid)
+      return curr;
+   else
+      return NULL;
+}
